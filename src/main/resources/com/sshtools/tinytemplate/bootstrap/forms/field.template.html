@@ -1,0 +1,45 @@
+<t:if label>
+    <t:if label.floating>
+        <t:if input.group>
+            <div class="form-floating input-group ${feedback:+has-validation}">
+                <t:include input/>
+                <label for="${input.id}" class="${label.class}">${label}</label>
+            </div>
+        <t:else/>
+            <div class="form-floating">
+                <t:include input/>
+                <label for="${input.id}" class="${label.class}">${label}</label>
+            </div>
+        </t:if>
+	<t:else/>
+        <t:if input.group>
+            <div class="input-group ${feedback:+has-validation}">
+                <t:if label.first>
+                    <label for="${input.id}" class="${label.class}">${label}</label>
+                </t:if>
+                <t:include input/>
+                <t:if !label.first>
+                    <label for="${input.id}" class="${label.class}">${label}</label>
+                </t:if>
+            </div>
+        <t:else/>
+            <t:if label.first>
+                <label for="${input.id}" class="${label.class}">${label}</label>
+            </t:if>
+            <t:include input/>
+            <t:if !label.first>
+                <label for="${input.id}" class="${label.class}">${label}</label>
+            </t:if>
+        </t:if>
+	</t:if>
+<t:else/>
+    <t:include input/>
+</t:if>
+<t:if feedback>
+    <div id="${id}Feedback" class="${feedback}">
+        ${feedback.text}
+    </div>
+</t:if>
+<t:if help>
+    <div id="${id}Help" class="form-text text-muted">${help}</div>
+</t:if>

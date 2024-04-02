@@ -1,0 +1,19 @@
+<t:if input.group.before>
+     <span class="input-group-text" id="${id}-inputGroup">${input.group.before}</span>
+</t:if>
+<t:if input>
+    <input name="${name}" id="${id}" type="${type}" class="${class}" ${attrs} ${checked:+checked} ${required:+required} ${disabled:+disabled} ${readonly:+readonly}/>
+</t:if>
+<t:if select>
+	<select name="${name}" id="${id}" class="${class}" ${attrs} ${readonly:+readonly} ${disabled:+disabled}>
+	  <t:list options>
+	    <option value="${value}" ${selected:+selected}>${text}</option>
+	  </t:list>
+	</select>
+</t:if>
+<t:if textarea>
+    <textarea name="${name}" id="${id}" class="${class}" ${attrs} ${readonly:+readonly} ${required:+required} ${disabled:+disabled}>${value}</textarea>
+</t:if>
+<t:if input.group.after>
+     <span class="input-group-text" id="${id}-inputGroup">${input.group.after}</span>
+</t:if>
