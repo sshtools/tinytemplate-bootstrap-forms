@@ -1,8 +1,10 @@
+<html lang="en" xmlns:t="https://jadaptive.com/t">
+<t:instruct reset/>
 <t:if input.group.before>
      <span class="input-group-text" id="${id}-inputGroup">${input.group.before}</span>
 </t:if>
 <t:if input>
-    <input name="${name}" id="${id}" type="${type}" class="${class}" ${attrs} ${checked:+checked} ${required:+required} ${disabled:+disabled} ${readonly:+readonly}/>
+   <input name="${name}" id="${id}" type="${type}" class="${class}" ${attrs} ${checked:+checked} ${required:+required} ${multiple:+multiple}  ${disabled:+disabled} ${readonly:+readonly}/>
 </t:if>
 <t:if select>
 	<select name="${name}" id="${id}" class="${class}" ${attrs} ${readonly:+readonly} ${disabled:+disabled}>
@@ -12,7 +14,7 @@
 	</select>
 </t:if>
 <t:if textarea>
-    <textarea name="${name}" id="${id}" class="${class}" ${attrs} ${readonly:+readonly} ${required:+required} ${disabled:+disabled}>${value}</textarea>
+    <textarea name="${name}" id="${id}" class="${class}" ${attrs} ${readonly:+readonly} ${required:+required} ${multiple:+multiple} ${disabled:+disabled}>${value}</textarea>
 </t:if>
 <t:if input.group.after>
      <span class="input-group-text" id="${id}-inputGroup">${input.group.after}</span>

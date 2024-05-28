@@ -1,0 +1,32 @@
+{
+  "resources":{
+  "includes":[{
+    "pattern":"\\Qcom/sshtools/tinytemplate/bootstrap/forms/column.template.html\\E"
+  }, {
+    "pattern":"\\Qcom/sshtools/tinytemplate/bootstrap/forms/field.template.html\\E"
+  }, {
+    "pattern":"\\Qcom/sshtools/tinytemplate/bootstrap/forms/form.template.html\\E"
+  }, {
+    "pattern":"\\Qcom/sshtools/tinytemplate/bootstrap/forms/group.template.html\\E"
+  }, {
+    "pattern":"\\Qcom/sshtools/tinytemplate/bootstrap/forms/input.template.html\\E"
+  }, {
+    "pattern":"\\Qcom/sshtools/tinytemplate/bootstrap/forms/row.template.html\\E"
+  }, {
+    "pattern":"com.sshtools.tinytemplate.bootstrap.forms:\\Qcom/sshtools/tinytemplate/bootstrap/forms/column.template.html\\E"
+  }, {
+    "pattern":"com.sshtools.tinytemplate.bootstrap.forms:\\Qcom/sshtools/tinytemplate/bootstrap/forms/field.template.html\\E"
+  }, {
+    "pattern":"com.sshtools.tinytemplate.bootstrap.forms:\\Qcom/sshtools/tinytemplate/bootstrap/forms/form.template.html\\E"
+  }, {
+    "pattern":"com.sshtools.tinytemplate.bootstrap.forms:\\Qcom/sshtools/tinytemplate/bootstrap/forms/group.template.html\\E"
+  }, {
+    "pattern":"com.sshtools.tinytemplate.bootstrap.forms:\\Qcom/sshtools/tinytemplate/bootstrap/forms/input.template.html\\E"
+  }, {
+    "pattern":"com.sshtools.tinytemplate.bootstrap.forms:\\Qcom/sshtools/tinytemplate/bootstrap/forms/row.template.html\\E"
+  }]},
+  "bundles":[{
+    "name":"com.sshtools.tinytemplate.bootstrap.forms.Form",
+    "locales":[""]
+  }]
+}

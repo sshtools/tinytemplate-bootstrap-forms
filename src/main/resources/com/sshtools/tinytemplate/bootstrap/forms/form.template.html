@@ -1,3 +1,26 @@
-<t:list rows>
-    <t:include row/>
-</t:list>
+<html lang="en" xmlns:t="https://jadaptive.com/t">
+<t:instruct reset />
+<t:if sections>
+	<ul class="nav nav-tabs" id="${id}-tabs" role="tablist">
+		<t:list sections>
+			<li class="nav-item" role="presentation">
+				<button class="nav-link ${active:+active}" id="${id}-tab" data-bs-toggle="tab"
+					data-bs-target="#${id}" type="button" role="tab"
+					aria-controls="${id}" aria-selected="true">${label}</button>
+			</li>
+		</t:list>
+	</ul>
+	<div class="tab-content mt-3" id="${id}-tabs-content">
+		<t:list sections>
+			<div class="tab-pane fade show ${active:+active}" id="${id}" role="tabpanel" aria-labelledby="${id}-tab">
+				<t:list rows>
+					<t:include row />
+				</t:list>
+			</div>
+		</t:list>
+	</div>
+<t:else/>
+	<t:list rows>
+		<t:include row />
+	</t:list>
+</t:if>

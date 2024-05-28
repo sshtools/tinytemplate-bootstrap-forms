@@ -1,25 +1,130 @@
 package com.sshtools.tinytemplate.bootstrap.forms;
 
+import java.net.URI;
+import java.net.URL;
+import java.text.MessageFormat;
 import java.util.ArrayList;
 import java.util.Arrays;
+import java.util.Collection;
 import java.util.Collections;
 import java.util.HashMap;
+import java.util.LinkedHashSet;
 import java.util.List;
 import java.util.Map;
 import java.util.Objects;
 import java.util.Optional;
 import java.util.Set;
 import java.util.function.Consumer;
+import java.util.function.Function;
 import java.util.function.Supplier;
 
+import com.sshtools.tinytemplate.Templates.TemplateModel;
 import com.sshtools.tinytemplate.bootstrap.forms.Form.FormFile;
 import com.sshtools.tinytemplate.bootstrap.forms.Validation.Validator;
 
 public final class Field<T, F> extends AbstractElement {
+
+	public static <F> String toString(Field<?, F> f) {
+		var gtr = f.value().orElse(null);
+		return toString(f, gtr == null ? null : gtr.get());
+	}
 	
-	public record Option(String text, String value) {
+	public static <F> String toString(Field<?, ?> f, F val) {
+		if(val == null) {
+			var clazz = f.resolveType();
+			if(clazz == null) {
+				return "";
+			}
+			else if(Boolean.class.isAssignableFrom(clazz)) {
+				return "false";	
+			}
+			else if(Number.class.isAssignableFrom(clazz)) {
+				return "0";	
+			}
+			else if(Character.class.isAssignableFrom(clazz)) {
+				return "?";	
+			}
+			else if(Byte.class.isAssignableFrom(clazz)) {
+				return "0";	
+			}
+			else {
+				return "";	
+			}
+		}
+		else {
+			return val.toString();
+		}
+	}
+	
+	@SuppressWarnings({ "unchecked", "rawtypes" })
+	public static <F> F valueOf(Field<?, F> f, String val) {
+		Object obj;
+		
+		var clazz = f.resolveType();
+		if(clazz == null)
+			throw new IllegalArgumentException(MessageFormat.format("Field {0} has no type, which is required for String to Object conversion. This probably means the initial value is `null`, which means the type of the `Field` must be specified using `type()` when building the form.", f.resolveName()));
+		if(Boolean.class.isAssignableFrom(clazz)) {
+			obj = "ON".equalsIgnoreCase(val) || Boolean.valueOf(val);	
+		}
+		else if(Double.class.isAssignableFrom(clazz)) {
+			obj = Double.valueOf(val);	
+		}
+		else if(Float.class.isAssignableFrom(clazz)) {
+			obj = Float.valueOf(val);	
+		}
+		else if(Long.class.isAssignableFrom(clazz)) {
+			obj = Long.valueOf(val);	
+		}
+		else if(Integer.class.isAssignableFrom(clazz)) {
+			obj = Integer.valueOf(val);	
+		}
+		else if(Short.class.isAssignableFrom(clazz)) {
+			obj = Short.valueOf(val);	
+		}
+		else if(Character.class.isAssignableFrom(clazz)) {
+			obj = val.length() == 0 ? (char)0 : val.charAt(0);	
+		}
+		else if(Byte.class.isAssignableFrom(clazz)) {
+			obj = val.length() == 0 ? (byte)0 : (byte)Integer.parseInt(val);	
+		}
+		else if(String.class.isAssignableFrom(clazz)) {
+			obj = val;	
+		}
+		else if(Enum.class.isAssignableFrom(clazz)) {
+			obj = (F)Enum.valueOf((Class<Enum>)clazz, val);
+		}
+		else if(URL.class.isAssignableFrom(clazz)) {
+			try {
+				obj = URI.create(val).toURL();
+			} catch (Exception e) {
+				obj = null;
+			}
+		}
+		else if(URI.class.isAssignableFrom(clazz)) {
+			obj = URI.create(val);
+		}
+		else {
+			throw new UnsupportedOperationException(MessageFormat.format("Unsupported type ''{0}''", clazz.getName()));
+		}
+		return (F)obj;
+	}
+	
+	public record Option(Text text, String value) {
 		public Option(String value) {
-			this(value, value);
+			this(Text.of(value), value);
+		}
+
+		@SuppressWarnings("unchecked")
+		public <T> Field<T, ?> asField(Field<T,?> parent) {
+			return (Field<T, ?>) new Field.Builder<>(Optional.empty()).
+					name(parent.resolveName()).
+					id(parent.resolveId().orElse("option-field") + "-" + Form.asId(value)).
+					input(parent.resolveInputType()).
+					groupCssClass().
+					disabled(() -> parent.resolveDisabled()).
+					label(text).
+					value(value).
+					build();
 		}
 	}
 	
@@ -44,31 +149,41 @@ public final class Field<T, F> extends AbstractElement {
 		}
 	}
 	
+	public record FieldDependency(String name, boolean negate, Object... values) {
+		public FieldDependency(String name, Object... values) {
+			this(name, false, values);
+		}
+	}
+	
 	public final static class Builder<T, F> extends AbstractBuilder<Builder<T,F>> {
 		private Optional<List<Span>> span = Optional.of(Collections.emptyList());
 		private Optional<List<Validator<F>>> validators = Optional.of(new ArrayList<>());
 		private Optional<Supplier<F>> value = Optional.empty();
 		private Optional<Consumer<F>> update = Optional.empty();
 		private Optional<T> instance;
-		private Optional<Boolean> disabled = Optional.empty();
+		private Optional<Supplier<Boolean>> disabled = Optional.empty();
 		private Optional<Boolean> readOnly = Optional.empty();
 		private Optional<Boolean> floatingLabel = Optional.empty();
 		private boolean noLabel;
 		private boolean required;
+		private boolean multiple;
 		private Optional<String> pattern = Optional.empty();
 		private Optional<String> name = Optional.empty();
 		private Optional<InputType> inputType = Optional.empty();
-		private Optional<Class<F>> type = Optional.empty();
+		private Optional<Class<? extends F>> type = Optional.empty();
 		private Optional<Text> label = Optional.empty();
 		private Optional<Text> help = Optional.empty();
 		private Optional<Text> placeholder = Optional.empty();
 		private Optional<Set<String>> groupCssClass = Optional.empty();
+		private Optional<Set<String>> labelCssClass = Optional.empty();
 		private Map<String, String> attrs = new HashMap<>();
 		private Optional<Supplier<List<Option>>> options = Optional.empty();
 		private Optional<String> inputGroupBefore = Optional.empty();
 		private Optional<String> inputGroupAfter = Optional.empty();
 		private Optional<Text> validFeedback = Optional.empty();
 		private Optional<Boolean> feedback = Optional.empty();
+		private Set<FieldDependency> depends = new LinkedHashSet<>();
+		private Optional<Function<F, TemplateModel>> renderer = Optional.empty();
 		
 		Builder(Optional<T> instance) {
 			this.instance = instance;
@@ -76,6 +191,24 @@ public final class Field<T, F> extends AbstractElement {
 		
 		public T $() {
 			return instance();
+		}
+		
+		public  Field.Builder<T, F> renderer(Function<F, TemplateModel> renderer) {
+			this.renderer = Optional.of(renderer);
+			return this;
+		}
+
+		public Field.Builder<T, F> depend(String name, Object... values) {
+			return depends(Arrays.asList(values).stream().map(v -> new FieldDependency(name, values)).toList());
+		}
+
+		public Field.Builder<T, F> depends(FieldDependency... dependencies) {
+			return depends(Arrays.asList(dependencies));
+		}
+
+		public Field.Builder<T, F> depends(Collection<FieldDependency> dependencies) {
+			depends.addAll(dependencies);
+			return this;
 		}
 	
 		public Field.Builder<T, F> validFeedback(Text validFeedback) {
@@ -89,6 +222,24 @@ public final class Field<T, F> extends AbstractElement {
 			
 		public Field.Builder<T, F> feedback(boolean feedback) {
 			this.feedback = Optional.of(feedback);
+			return this;
+		}
+
+		@SuppressWarnings("unchecked")
+		public <E extends Enum<E>> Field.Builder<T, F> enums(Class<E> enums, E... values) {
+			options(Arrays.asList(values).stream().map(en -> new Option( en.name())).toList());
+			return this;
+		}
+
+		@SuppressWarnings("unchecked")
+		public <E extends Enum<E>> Field.Builder<T, F> i18nEnums(Class<E> enums, E... values) {
+			options(Arrays.asList(values).stream().map(en -> new Option(Text.ofI18n(en.getClass().getName() + "." + en.name() + ".name"), en.name())).toList());
+			return this;
+		}
+
+		@SuppressWarnings("unchecked")
+		public <E extends Enum<E>> Field.Builder<T, F> i18nEnums(Class<E> enums, Class<?> base, E... values) {
+			options(Arrays.asList(values).stream().map(en -> new Option(Text.ofI18n(en.getClass().getName() + "." + en.name() + ".name", base), en.name())).toList());
 			return this;
 		}
 		
@@ -159,6 +310,15 @@ public final class Field<T, F> extends AbstractElement {
 			return this;
 		}
 		
+		public Field.Builder<T, F> multiple() {
+			return multiple(true);
+		}
+		
+		public Field.Builder<T, F> multiple(boolean multiple) {
+			this.multiple = multiple;
+			return this;
+		}
+		
 		public Field.Builder<T, F> pattern(String pattern) {
 			this.pattern = Optional.of(pattern);
 			return this;
@@ -169,7 +329,7 @@ public final class Field<T, F> extends AbstractElement {
 			return this;
 		}
 		
-		public Field.Builder<T, F> type(Class<F> type) {
+		public Field.Builder<T, F> type(Class<? extends F> type) {
 			this.type = Optional.of(type);
 			return this;
 		}
@@ -194,6 +354,10 @@ public final class Field<T, F> extends AbstractElement {
 		}
 		
 		public Field.Builder<T, F> disabled(boolean disabled) {
+			return disabled(() -> disabled);
+		}
+		
+		public Field.Builder<T, F> disabled(Supplier<Boolean> disabled) {
 			this.disabled = Optional.of(disabled);
 			return this;
 		}
@@ -290,6 +454,15 @@ public final class Field<T, F> extends AbstractElement {
 			return this;
 		}
 		
+		public Field.Builder<T, F> labelCssClass(String... labelCssClasses) {
+			return labelCssClass(Set.of(labelCssClasses));
+		}
+		
+		public Field.Builder<T, F> labelCssClass(Set<String> labelCssClasses) {
+			this.labelCssClass = Optional.of(labelCssClasses);
+			return this;
+		}
+		
 		public Field<T, F> build() {
 			return new Field<>(this);
 		}
@@ -299,10 +472,11 @@ public final class Field<T, F> extends AbstractElement {
 	private Optional<List<Validator<F>>> validators;
 	private final Optional<Text> label;		
 	private final boolean noLabel;				
-	private final boolean required;
+	private final boolean required;			
+	private final boolean multiple;
 	private final Optional<String> pattern;
 	private final Optional<Text> help;
-	private final Optional<Class<F>> type;				
+	private final Optional<Class<? extends F>> type;				
 	private final Optional<Text> placeholder;		
 	private final Optional<InputType> inputType;
 	private final Map<String, String> attrs;
@@ -310,7 +484,7 @@ public final class Field<T, F> extends AbstractElement {
 	private final Optional<Consumer<F>> update;
 	private final Optional<Supplier<List<Option>>> options;
 	private final Optional<Set<String>> groupCssClass;
-	private final Optional<Boolean> disabled;
+	private final Optional<Supplier<Boolean>> disabled;
 	private final Optional<Boolean> readOnly;
 	private final Optional<Boolean> floatingLabel;
 	private final Optional<String> inputGroupBefore;
@@ -318,9 +492,14 @@ public final class Field<T, F> extends AbstractElement {
 	private final Optional<String> name;
 	private final Optional<Text> validFeedback;
 	private final Optional<Boolean> feedback;
+	private final Set<FieldDependency> depends;
+	private final Optional<Set<String>> labelCssClass;
+	private final Optional<Function<F, TemplateModel>> renderer;
 	
 	private Field(Field.Builder<T, F> bldr) {
 		super(bldr);
+		this.multiple = bldr.multiple;
+		this.renderer = bldr.renderer;
 		this.name = bldr.name;
 		this.feedback = bldr.feedback;
 		this.validFeedback = bldr.validFeedback;
@@ -331,6 +510,7 @@ public final class Field<T, F> extends AbstractElement {
 		this.pattern = bldr.pattern;
 		this.disabled = bldr.disabled;
 		this.groupCssClass = bldr.groupCssClass;
+		this.labelCssClass = bldr.labelCssClass;
 		this.options = bldr.options;
 		this.value = bldr.value;
 		this.update  = bldr.update;
@@ -341,11 +521,16 @@ public final class Field<T, F> extends AbstractElement {
 		this.help = bldr.help;
 		this.noLabel = bldr.noLabel;
 		this.placeholder = bldr.placeholder;
+		this.depends = Collections.unmodifiableSet(new LinkedHashSet<>(bldr.depends));
 		this.attrs = Collections.unmodifiableMap(new HashMap<>(bldr.attrs));
 		this.validators = bldr.validators.map(vals ->  Collections.unmodifiableList(new ArrayList<>(vals)));
 		this.floatingLabel = resolveInputType().supportsFloating() ? bldr.floatingLabel : Optional.of(false);
 	}
 	
+	public Optional<Function<F, TemplateModel>> renderer() {
+		return renderer;
+	}
+
 	public Optional<List<Validator<F>>> validators() {
 		return validators;
 	}
@@ -356,6 +541,10 @@ public final class Field<T, F> extends AbstractElement {
 	
 	public Optional<Set<String>> groupCssClass() {
 		return groupCssClass;
+	}
+	
+	public Optional<Set<String>> labelCssClass() {
+		return labelCssClass;
 	}
 
 	public Optional<Supplier<F>> value() {
@@ -368,6 +557,10 @@ public final class Field<T, F> extends AbstractElement {
 
 	public Optional<Boolean> feedback() {
 		return feedback;
+	}
+
+	public Set<FieldDependency> depends() {
+		return depends;
 	}
 
 	public Optional<Consumer<F>> update() {
@@ -398,12 +591,16 @@ public final class Field<T, F> extends AbstractElement {
 		return required;
 	}
 	
+	public boolean multiple() {
+		return multiple;
+	}
+	
 	public Optional<Boolean> disabled() {
-		return disabled;
+		return disabled.map(d -> d.get());
 	}
 	
 	public Optional<Boolean> readOnly() {
-		return disabled;
+		return readOnly;
 	}
 	
 	public Optional<Boolean> floatingLabel() {
@@ -414,7 +611,7 @@ public final class Field<T, F> extends AbstractElement {
 		return inputType;
 	}
 	
-	public Optional<Class<F>> type() {
+	public Optional<Class<? extends F>> type() {
 		return type;
 	}
 	
@@ -455,6 +652,12 @@ public final class Field<T, F> extends AbstractElement {
 		return noLabel;
 	}
 
+	public boolean resolveDisabled() {
+		return disabled().orElseGet(() -> {
+			return update().isEmpty() && !resolveInputType().supportsReadOnly();
+		});
+	}
+
 	public InputType resolveInputType() {
 		var inputType = inputType().orElse(InputType.AUTO);
 		if(inputType == InputType.AUTO) {
@@ -481,23 +684,27 @@ public final class Field<T, F> extends AbstractElement {
 	}
 	
 	@SuppressWarnings("unchecked")
-	Class<F> resolveType() {
-		return type().orElseGet(() -> (Class<F>)(value.orElseGet(() -> ()-> {
-			if(inputType.isPresent()) {
-				switch(inputType.get()) {
-				case CHECKBOX:
-				case SWITCH:
-					return (F)Boolean.class;
-				case FILE:
-					return (F)FormFile.class;
-				default:
+	Class<? extends F> resolveType() {
+		return type().orElseGet(() -> {
+			F val = value.orElseGet(() -> ()-> {
+				if(inputType.isPresent()) {
+					switch(inputType.get()) {
+					case RADIO:
+					case CHECKBOX:
+					case SWITCH:
+						return (F)Boolean.class;
+					case FILE:
+						return (F)FormFile.class;
+					default:
+						return (F)"";
+					}
+				}
+				else {
 					return (F)"";
 				}
-			}
-			else {
-				return (F)"";
-			}
-		}).get().getClass()));
+			}).get();
+			return  val == null ? null : (Class<F>)(val.getClass());
+		});
 	}
 
 	@Override

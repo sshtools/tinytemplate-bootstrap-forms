@@ -1,6 +1,7 @@
 package com.sshtools.tinytemplate.bootstrap.forms;
 
 import java.text.MessageFormat;
+import java.util.Locale;
 import java.util.MissingResourceException;
 import java.util.Optional;
 import java.util.ResourceBundle;
@@ -41,8 +42,20 @@ public final class Text {
 		return new Builder().text(text).build();
 	}
 	
-	public final static Text of(String key, ResourceBundle bundle, Object... args) {
+	public final static Text ofI18n(String key, Object... args) {
+		return new Builder().key(key).args(args).build();
+	}
+	
+	public final static Text ofI18n(String key, ResourceBundle bundle, Object... args) {
 		return new Builder().key(key).bundle(bundle).args(args).build();
+	}
+
+	public final static Text ofI18n(String key, Class<?> bundle, Object... args) {
+		return ofI18n(key, bundle, Locale.getDefault(), args);
+	}
+	
+	public final static Text ofI18n(String key, Class<?> bundle, Locale locale, Object... args) {
+		return new Builder().key(key).bundle(ResourceBundle.getBundle(bundle.getName(), locale, bundle.getClassLoader())).args(args).build();
 	}
 	
 	final Optional<String> text;

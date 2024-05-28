@@ -1,3 +1,5 @@
+<html lang="en" xmlns:t="https://jadaptive.com/t">
+<t:instruct reset/>
 <t:if label>
     <t:if label.floating>
         <t:if input.group>
@@ -18,7 +20,7 @@
                     <label for="${input.id}" class="${label.class}">${label}</label>
                 </t:if>
                 <t:include input/>
-                <t:if !label.first>
+                <t:if not label.first>
                     <label for="${input.id}" class="${label.class}">${label}</label>
                 </t:if>
             </div>
@@ -26,8 +28,16 @@
             <t:if label.first>
                 <label for="${input.id}" class="${label.class}">${label}</label>
             </t:if>
-            <t:include input/>
-            <t:if !label.first>
+            <t:if options>
+            	<fieldset id="form-group-${input.id}-options" class="${options.class}">
+	            	<t:list options>
+	            		<t:include option/>
+	            	</t:list>
+            	</fieldset>
+            <t:else/>
+            	<t:include input/>
+            </t:if>
+            <t:if not label.first>
                 <label for="${input.id}" class="${label.class}">${label}</label>
             </t:if>
         </t:if>
