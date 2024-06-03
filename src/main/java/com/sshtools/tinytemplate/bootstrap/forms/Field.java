@@ -168,6 +168,7 @@ public final class Field<T, F> extends AbstractElement {
 		private boolean required;
 		private boolean multiple;
 		private Optional<String> pattern = Optional.empty();
+		private Optional<String> dropzone = Optional.empty();
 		private Optional<String> name = Optional.empty();
 		private Optional<InputType> inputType = Optional.empty();
 		private Optional<Class<? extends F>> type = Optional.empty();
@@ -321,6 +322,11 @@ public final class Field<T, F> extends AbstractElement {
 		
 		public Field.Builder<T, F> pattern(String pattern) {
 			this.pattern = Optional.of(pattern);
+			return this;
+		}
+		
+		public Field.Builder<T, F> dropzone(String dropzone) {
+			this.dropzone = Optional.of(dropzone);
 			return this;
 		}
 		
@@ -495,9 +501,11 @@ public final class Field<T, F> extends AbstractElement {
 	private final Set<FieldDependency> depends;
 	private final Optional<Set<String>> labelCssClass;
 	private final Optional<Function<F, TemplateModel>> renderer;
+	private final Optional<String> dropzone;
 	
 	private Field(Field.Builder<T, F> bldr) {
 		super(bldr);
+		this.dropzone = bldr.dropzone;
 		this.multiple = bldr.multiple;
 		this.renderer = bldr.renderer;
 		this.name = bldr.name;
@@ -549,6 +557,10 @@ public final class Field<T, F> extends AbstractElement {
 
 	public Optional<Supplier<F>> value() {
 		return value;
+	}
+
+	public Optional<String> dropzone() {
+		return dropzone;
 	}
 
 	public Optional<Text> validFeedback() {
@@ -656,6 +668,11 @@ public final class Field<T, F> extends AbstractElement {
 		return disabled().orElseGet(() -> {
 			return update().isEmpty() && !resolveInputType().supportsReadOnly();
 		});
+	}
+
+	@Override
+	public Optional<String> resolveId() {
+		return super.resolveId().or(() -> name);
 	}
 
 	public InputType resolveInputType() {

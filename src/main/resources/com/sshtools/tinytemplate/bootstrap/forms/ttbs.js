@@ -50,6 +50,86 @@ class TinyTemplateBoostrapForms {
 			templates.forEach((t) => {
 				this.addTemplatedRow(t);
 			});
+			let dropzones = frm.querySelectorAll('[data-dropzone]');
+			dropzones.forEach((dz) => {
+				
+				let rz = document.getElementById(dz.dataset.dropzone);
+				
+				rz.classList.add('drop-zone');
+				rz.addEventListener('drop', (evt) => {
+					dz.files = evt.dataTransfer.files;
+					rz.classList.remove('border', 'border-2', 'p-3');
+					evt.preventDefault();
+				});
+				rz.addEventListener('dragover', (evt) => {
+					rz.classList.add('border', 'border-2', 'p-3');
+					evt.preventDefault();
+				});
+				rz.addEventListener('dragleave', (evt) => {
+					rz.classList.remove('border', 'border-2', 'p-3');
+				});
+			});
+			
+			/* Deal with field actions */
+			let fieldActions = frm.querySelectorAll('[data-field-op]');
+			fieldActions.forEach((fa) => {
+				let trigger = fa.dataset.fieldTrigger; 
+				fa.addEventListener(trigger ? trigger : 'click', (evt) => {
+					
+					/* TODO one way at the moment */
+					fa.classList.add('d-none');
+					
+					/* Apply visual effect */
+					let effect = fa.dataset.fieldEffect;
+					if(effect) {
+						let effectTarget = fa.dataset.fieldEffectTarget;
+						if(effectTarget) {
+							let effectEl = document.getElementById(effectTarget);
+							if(effectEl) {
+								if(effect === 'hide') {
+									effectEl.classList.add('d-none');
+								}
+								else if(effect === 'strikethru') {
+									effectEl.classList.add('text-decoration-line-through');
+								}
+								else {
+									console.log('Effect "' + effect + '" does not exist, specified for a target "' + effectTarget + '"');
+								}
+							}
+							else {
+								console.log('Effect specified for a target "' + effectTarget + '" that does not exist.');
+							}
+						}
+						else {
+							console.log('Effect specified, but no effect target.');
+						}
+					}
+					
+					/* Update state (i.e. adjust targeted form field values) */
+					let op = fa.dataset.fieldOp;
+					let fieldName = fa.dataset.fieldName;
+					let field = document.querySelector('[name=' + fieldName + ']');
+					if(field) {
+						if(op === 'remove-from-string-list') {
+							field.value = field.value.split(',').filter(item => item !== fa.dataset.fieldValue).join(",");
+						}
+						else if(op === 'add-to-string-list') {
+							let currentList = field.value.split(',');
+							currentList.append(fa.dataset.fieldValue);
+							field.value = currentList.join(",");
+						}
+						else {
+							console.log('Unknown field op "' + op + '".');
+						}
+					}
+					else {
+						console.log('Unknown field "' + fieldName + '".');
+					}
+						
+					
+					evt.preventDefault();
+				});
+			});
 		});
 		
         return true;

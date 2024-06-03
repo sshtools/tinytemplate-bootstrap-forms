@@ -120,6 +120,10 @@ public final class Form<T> extends AbstractElement implements FormType<T> {
 		public static <T> Builder<T> edit(T instance) {
 			return new Builder<>(Optional.of(instance), Optional.empty());
 		}
+		
+		public static Builder<Void> typeless() {
+			return new Builder<>(Optional.empty(), Optional.empty());
+		}
 
 		Builder(Optional<T> instance, Optional<Class<T>> type) {
 			super(instance, type);
@@ -306,7 +310,16 @@ public final class Form<T> extends AbstractElement implements FormType<T> {
 						
 		if(validate) {
 			fields.values().forEach(field -> {
-				if(!processed.contains(field) && field.required() && isEmpty(field.value().map(Supplier::get).orElse(null))) {
+				var maybeRequired = !processed.contains(field) && field.required();
+				
+				if(maybeRequired && !field.depends().isEmpty()) {
+					/* Not posted, but required. See if it is actually required given 
+					 * the state of the other fields it depends on
+					 */
+					maybeRequired = isActuallyRequired(field, values);
+				}
+				
+				if(maybeRequired && isEmpty(field.value().map(Supplier::get).orElse(null))) {
 					addError(field, new ValidationException(field, Text.ofI18n("field.required", defaultBundle, resolveText(field))));
 				}
 			});
@@ -340,6 +353,23 @@ public final class Form<T> extends AbstractElement implements FormType<T> {
 			}
 			
 		};
+	}
+
+	private boolean isActuallyRequired(Field<T, ?> field, HashMap<Field<T, ?>, Object> values) {
+		for(var depend : field.depends()) {
+			var otherField = fields.get(depend.name());
+			if(otherField != null) {
+				var otherValue = values.get(otherField);
+				var match = Arrays.asList(depend.values()).contains(otherValue);
+				if(depend.negate())
+					match = !match;
+				if(match) {
+					return true;
+				}
+				
+			}
+		}
+		return false;
 	}
 
 	private <F> Optional<List<Validator<F>>> resolveValidators(Field<T, F> field) {
@@ -540,6 +570,7 @@ public final class Form<T> extends AbstractElement implements FormType<T> {
 		
 		mdl.variable("id", id);
 		mdl.variable("input.id", inputId);
+		mdl.variable("input.value", () -> Field.toString(field));
 		mdl.variable("label.class", resolveLabelCssClass(field));
 		if(!field.noLabel()) {
 			resolveText(field, resolvedId).ifPresent(str -> mdl.variable("label", str));
@@ -716,6 +747,8 @@ public final class Form<T> extends AbstractElement implements FormType<T> {
 				attrs.put("placeholder", resolveString("label", resolvedId, field.label(), () -> english(resolvedId)).orElse(english(resolvedId)));
 			} 
 		});
+		
+		field.dropzone().ifPresent(dz -> attrs.put("data-dropzone", dz));
 	
 		if(hasHelp) {
 			if(hasFeedback)
