@@ -1,12 +1,21 @@
 package com.sshtools.tinytemplate.bootstrap.forms;
 
+import java.lang.reflect.Array;
 import java.net.URI;
 import java.net.URL;
 import java.text.MessageFormat;
+import java.text.SimpleDateFormat;
+import java.time.Instant;
+import java.time.LocalDate;
+import java.time.LocalDateTime;
+import java.time.ZoneId;
+import java.time.format.DateTimeFormatter;
 import java.util.ArrayList;
 import java.util.Arrays;
+import java.util.Calendar;
 import java.util.Collection;
 import java.util.Collections;
+import java.util.Date;
 import java.util.HashMap;
 import java.util.LinkedHashSet;
 import java.util.List;
@@ -17,6 +26,7 @@ import java.util.Set;
 import java.util.function.Consumer;
 import java.util.function.Function;
 import java.util.function.Supplier;
+import java.util.stream.Stream;
 
 import com.sshtools.tinytemplate.Templates.TemplateModel;
 import com.sshtools.tinytemplate.bootstrap.forms.Form.FormFile;
@@ -25,11 +35,19 @@ import com.sshtools.tinytemplate.bootstrap.forms.Validation.Validator;
 public final class Field<T, F> extends AbstractElement {
 
 	public static <F> String toString(Field<?, F> f) {
+		return toString((Framework)null, f);
+	}
+
+	public static <F> String toString(Framework framework, Field<?, F> f) {
 		var gtr = f.value().orElse(null);
-		return toString(f, gtr == null ? null : gtr.get());
+		return toString(framework, f, gtr == null ? null : gtr.get());
 	}
 	
 	public static <F> String toString(Field<?, ?> f, F val) {
+		return toString(null, f, val);
+	}
+	
+	public static <F> String toString(Framework framework, Field<?, ?> f, F val) {
 		if(val == null) {
 			var clazz = f.resolveType();
 			if(clazz == null) {
@@ -52,17 +70,101 @@ public final class Field<T, F> extends AbstractElement {
 			}
 		}
 		else {
-			return val.toString();
+			return toValString(framework, f, val);
+		}
+	}
+
+	public static String toValString(Object obj) {
+		return toValString(null,  null, obj);
+	}
+
+	@SuppressWarnings("unchecked")
+	public static String toValString(Framework framework,  Field<?, ?> f, Object obj) {
+		if(obj == null)
+			return "";
+		else if(obj instanceof Optional opt) {
+			return toValString(framework, f, opt.orElse(null));
+		}
+		else if(obj instanceof Collection col) {
+			return String.join(" ", col.stream().map(v -> toValString(framework, f, v)).toList());
+		}
+		else if(obj.getClass().isArray()) {
+			return String.join(" ", Arrays.asList((Object[])obj).stream().map(v -> toValString(framework, f, v)).toList());
+		}
+		else {
+			if(obj instanceof Instant inst) {
+				var dtf = dateParserForType(f.resolveInputType());
+				if(dtf.isPresent()) {
+					return dtf.get().format(inst);
+				}
+			}
+			else if(obj instanceof Calendar cal) {
+				var dtf = legacyDateParserForType(f.resolveInputType());
+				if(dtf.isPresent()) {
+					return dtf.get().format(cal.getTime());
+				}
+			}
+			else if(obj instanceof Date dt) {
+				var dtf = legacyDateParserForType(f.resolveInputType());
+				if(dtf.isPresent()) {
+					return dtf.get().format(dt);
+				}
+			}
+			
+			return framework == null ? String.valueOf(obj) : framework.processValueRender(f, String.valueOf(obj));
 		}
 	}
 	
-	@SuppressWarnings({ "unchecked", "rawtypes" })
-	public static <F> F valueOf(Field<?, F> f, String val) {
-		Object obj;
+	public static Optional<DateTimeFormatter> dateParserForType(InputType type) {
+		switch(type) {
+		case DATETIME_LOCAL:
+	        return Optional.of(DateTimeFormatter.ofPattern("yyyy-MM-dd'T'HH:mm").withZone(zoneId()));
+		case DATE:
+	        return Optional.of(DateTimeFormatter.ofPattern("yyyy-MM-dd").withZone(zoneId()));
+		case MONTH:
+	        return Optional.of(DateTimeFormatter.ofPattern("yyyy-MM").withZone(zoneId()));
+		case TIME:
+	        return Optional.of(DateTimeFormatter.ofPattern("HH:mm").withZone(zoneId()));
+	    default:
+	    	break;
+		}
+		return Optional.empty();
+	}
+
+	private static ZoneId zoneId() {
+		return ZoneId.systemDefault();
+	}
+
+	private static Optional<SimpleDateFormat> legacyDateParserForType(InputType type) {
+		switch(type) {
+		case DATETIME_LOCAL:
+		    return Optional.of(new SimpleDateFormat("yyyy-MM-dd'T'HH:mm"));
+		case DATE:
+		    return Optional.of(new SimpleDateFormat("yyyy-MM-dd"));
+		case MONTH:
+		    return Optional.of(new SimpleDateFormat("yyyy-MM"));
+		case TIME:
+		    return Optional.of(new SimpleDateFormat("HH:mm"));
+		default:
+	    	break;
+		}
+		return Optional.empty();
+	}
+	
+	public static <F> F valueOf(Framework framework, Field<?, F> f, String val) {
 		
 		var clazz = f.resolveType();
 		if(clazz == null)
 			throw new IllegalArgumentException(MessageFormat.format("Field {0} has no type, which is required for String to Object conversion. This probably means the initial value is `null`, which means the type of the `Field` must be specified using `type()` when building the form.", f.resolveName()));
+		return calcValueOf(framework, f, val, clazz);
+	}
+
+	@SuppressWarnings({ "unchecked", "rawtypes" })
+	private static <F> F calcValueOf(Framework framework, Field<?, F> f, String val,
+			Class<?> clazz) {
+
+		Object obj;
+		
 		if(Boolean.class.isAssignableFrom(clazz)) {
 			obj = "ON".equalsIgnoreCase(val) || Boolean.valueOf(val);	
 		}
@@ -103,6 +205,69 @@ public final class Field<T, F> extends AbstractElement {
 		else if(URI.class.isAssignableFrom(clazz)) {
 			obj = URI.create(val);
 		}
+		else if(List.class.isAssignableFrom(clazz)) {
+			if("".equals(val)) {
+				return (F) Collections.emptyList();
+			}
+			/* TODO .. for now we are using space separators, this will be configurable */
+			obj = Arrays.asList(val.split("\\s+")).stream().
+					map(s ->calcValueOf(framework, f, framework.processValueSubmit(f, s), f.resolveItemType())).
+					toList();
+		}
+		else if(clazz.isArray()) {
+			/* TODO .. for now we are using space separators, this will be configurable */
+			Class<?> itype = f.resolveItemType();
+			if("".equals(val)) {
+				return (F)Array.newInstance(itype, 0);
+			}
+			var vals = val.split("\\s+");
+			F newArr = (F) Array.newInstance(itype, vals.length);
+			for(int i = 0 ; i < vals.length ; i++) {
+				var newVal = calcValueOf(framework, f, framework.processValueSubmit(f, vals[i]), itype);
+				Array.set(newArr, i, newVal);
+			}
+			obj = newArr;
+		}
+		else if(Instant.class.isAssignableFrom(clazz)) {
+			try {
+				var type = f.resolveInputType();
+				var dateTimeFormatter = dateParserForType(type).get();
+				switch(type) {
+				case DATETIME_LOCAL:
+					var localDateTime = LocalDateTime.parse(val, dateTimeFormatter); 
+					var zonedDateTime = localDateTime.atZone(zoneId()); 
+					obj = zonedDateTime.toInstant();
+					break;
+				default:
+					var localDate = LocalDate.parse(val, dateTimeFormatter); 
+					var zonedDate = localDate.atStartOfDay(zoneId()); 
+					obj = zonedDate.toInstant();
+					break;
+					
+				}
+			}
+			catch(Exception e) {
+				obj = null;
+			}
+		}
+		else if(Calendar.class.isAssignableFrom(clazz)) {
+			try {
+				
+				obj = Calendar.getInstance();
+				((Calendar)obj).setTime(legacyDateParserForType(f.resolveInputType()).get().parse(val));
+			}
+			catch(Exception e) {
+				obj = null;
+			}
+		}
+		else if(Date.class.isAssignableFrom(clazz)) {
+			try {
+				obj = legacyDateParserForType(f.resolveInputType()).get().parse(val);
+			}
+			catch(Exception e) {
+				obj = null;
+			}
+		}
 		else {
 			throw new UnsupportedOperationException(MessageFormat.format("Unsupported type ''{0}''", clazz.getName()));
 		}
@@ -111,7 +276,11 @@ public final class Field<T, F> extends AbstractElement {
 	
 	public record Option(Text text, String value) {
 		public Option(String value) {
-			this(Text.of(value), value);
+			this(value, value);
+		}
+		
+		public Option(String text, String value) {
+			this(Text.of(text), value);
 		}
 
 		@SuppressWarnings("unchecked")
@@ -166,12 +335,13 @@ public final class Field<T, F> extends AbstractElement {
 		private Optional<Boolean> floatingLabel = Optional.empty();
 		private boolean noLabel;
 		private boolean required;
-		private boolean multiple;
+		private Optional<Boolean> multiple = Optional.empty();;
 		private Optional<String> pattern = Optional.empty();
 		private Optional<String> dropzone = Optional.empty();
 		private Optional<String> name = Optional.empty();
 		private Optional<InputType> inputType = Optional.empty();
 		private Optional<Class<? extends F>> type = Optional.empty();
+		private Optional<Class<?>> itemType = Optional.empty();
 		private Optional<Text> label = Optional.empty();
 		private Optional<Text> help = Optional.empty();
 		private Optional<Text> placeholder = Optional.empty();
@@ -179,8 +349,8 @@ public final class Field<T, F> extends AbstractElement {
 		private Optional<Set<String>> labelCssClass = Optional.empty();
 		private Map<String, String> attrs = new HashMap<>();
 		private Optional<Supplier<List<Option>>> options = Optional.empty();
-		private Optional<String> inputGroupBefore = Optional.empty();
-		private Optional<String> inputGroupAfter = Optional.empty();
+		private Optional<Supplier<TemplateModel>> inputGroupBefore = Optional.empty();
+		private Optional<Supplier<TemplateModel>> inputGroupAfter = Optional.empty();
 		private Optional<Text> validFeedback = Optional.empty();
 		private Optional<Boolean> feedback = Optional.empty();
 		private Set<FieldDependency> depends = new LinkedHashSet<>();
@@ -244,8 +414,18 @@ public final class Field<T, F> extends AbstractElement {
 			return this;
 		}
 		
-		public Field.Builder<T, F> options(String... options) {
-			return options(Arrays.asList(options).stream().map(Option::new).toList());
+		public Field.Builder<T, F> optionValues(String... options) {
+			return optionValues(Arrays.asList(options));
+		}
+		
+		public Field.Builder<T, F> optionValues(Collection<String> options) {
+			return options(options.stream().map(Option::new).toList());
+		}
+		
+		public Field.Builder<T, F> optionValues(Supplier<List<String>> options) {
+			return options(() ->
+				options.get().stream().map(Option::new).toList()
+			);
 		}
 		
 		public Field.Builder<T, F> options(Option... options) {
@@ -316,7 +496,7 @@ public final class Field<T, F> extends AbstractElement {
 		}
 		
 		public Field.Builder<T, F> multiple(boolean multiple) {
-			this.multiple = multiple;
+			this.multiple = Optional.of(multiple);
 			return this;
 		}
 		
@@ -337,6 +517,11 @@ public final class Field<T, F> extends AbstractElement {
 		
 		public Field.Builder<T, F> type(Class<? extends F> type) {
 			this.type = Optional.of(type);
+			return this;
+		}
+		
+		public Field.Builder<T, F> itemType(Class<?> itemType) {
+			this.itemType = Optional.of(itemType);
 			return this;
 		}
 		
@@ -387,11 +572,27 @@ public final class Field<T, F> extends AbstractElement {
 		}
 		
 		public Field.Builder<T, F> inputGroupBefore(String inputGroupBefore) {
+			return inputGroupBefore(TemplateModel.ofContent(inputGroupBefore));
+		}
+		
+		public Field.Builder<T, F> inputGroupBefore(TemplateModel inputGroupBefore) {
+			return inputGroupBefore(() -> inputGroupBefore);
+		}
+		
+		public Field.Builder<T, F> inputGroupBefore(Supplier<TemplateModel> inputGroupBefore) {
 			this.inputGroupBefore = Optional.of(inputGroupBefore);
 			return this;
 		}
 		
 		public Field.Builder<T, F> inputGroupAfter(String inputGroupAfter) {
+			return inputGroupAfter(TemplateModel.ofContent(inputGroupAfter));
+		}
+		
+		public Field.Builder<T, F> inputGroupAfter(TemplateModel inputGroupAfter) {
+			return inputGroupAfter(() -> inputGroupAfter);
+		}
+		
+		public Field.Builder<T, F> inputGroupAfter(Supplier<TemplateModel> inputGroupAfter) {
 			this.inputGroupAfter = Optional.of(inputGroupAfter);
 			return this;
 		}
@@ -479,10 +680,11 @@ public final class Field<T, F> extends AbstractElement {
 	private final Optional<Text> label;		
 	private final boolean noLabel;				
 	private final boolean required;			
-	private final boolean multiple;
+	private final Optional<Boolean> multiple;
 	private final Optional<String> pattern;
 	private final Optional<Text> help;
 	private final Optional<Class<? extends F>> type;				
+	private final Optional<Class<?>> itemType;
 	private final Optional<Text> placeholder;		
 	private final Optional<InputType> inputType;
 	private final Map<String, String> attrs;
@@ -493,8 +695,8 @@ public final class Field<T, F> extends AbstractElement {
 	private final Optional<Supplier<Boolean>> disabled;
 	private final Optional<Boolean> readOnly;
 	private final Optional<Boolean> floatingLabel;
-	private final Optional<String> inputGroupBefore;
-	private final Optional<String> inputGroupAfter;
+	private final Optional<Supplier<TemplateModel>> inputGroupBefore;
+	private final Optional<Supplier<TemplateModel>> inputGroupAfter;
 	private final Optional<String> name;
 	private final Optional<Text> validFeedback;
 	private final Optional<Boolean> feedback;
@@ -524,6 +726,7 @@ public final class Field<T, F> extends AbstractElement {
 		this.update  = bldr.update;
 		this.inputType = bldr.inputType;
 		this.type = bldr.type;
+		this.itemType = bldr.itemType;
 		this.span = bldr.span;
 		this.label = bldr.label;
 		this.help = bldr.help;
@@ -579,11 +782,11 @@ public final class Field<T, F> extends AbstractElement {
 		return update;
 	}
 
-	public Optional<String> inputGroupBefore() {
+	public Optional<Supplier<TemplateModel>> inputGroupBefore() {
 		return inputGroupBefore;
 	}
 
-	public Optional<String> inputGroupAfter() {
+	public Optional<Supplier<TemplateModel>> inputGroupAfter() {
 		return inputGroupAfter;
 	}
 
@@ -603,7 +806,7 @@ public final class Field<T, F> extends AbstractElement {
 		return required;
 	}
 	
-	public boolean multiple() {
+	public Optional<Boolean> multiple() {
 		return multiple;
 	}
 	
@@ -625,6 +828,10 @@ public final class Field<T, F> extends AbstractElement {
 	
 	public Optional<Class<? extends F>> type() {
 		return type;
+	}
+	
+	public Optional<Class<?>> itemType() {
+		return itemType;
 	}
 	
 	public Optional<Text> label() {
@@ -678,18 +885,67 @@ public final class Field<T, F> extends AbstractElement {
 	public InputType resolveInputType() {
 		var inputType = inputType().orElse(InputType.AUTO);
 		if(inputType == InputType.AUTO) {
-			var type = resolveType();
-			if(Number.class.isAssignableFrom(type)) {
-				return InputType.NUMBER;
-			}
-			else if(Boolean.class.isAssignableFrom(type)) {
-				return InputType.CHECKBOX;
+			if(resolveMultiple()) {
+				return value.map(f -> inputTypeForType(firstTypeInCollection(f.get()))).orElse(InputType.TEXTAREA);
 			}
 			else {
-				return InputType.TEXT;
+				return inputTypeForType(resolveType());
 			}
 		}
 		return inputType;
+	}
+	
+	public boolean resolveMultiple() {
+		return multiple.orElseGet(() -> {
+			var type = resolveType();
+			return Collection.class.isAssignableFrom(type) ||
+					Iterable.class.isAssignableFrom(type) || 
+					Stream.class.isAssignableFrom(type) ||
+					type.isArray();
+		});
+	}
+
+	@SuppressWarnings("unchecked")
+	private Class<?> firstTypeInCollection(Object f) {
+		if(f != null) {
+			if(f instanceof Collection col && !col.isEmpty()) {
+				return col.iterator().next().getClass();
+			}
+			else if(f instanceof Iterable iter) {
+				var it = iter.iterator();
+				if(it.hasNext()) {
+					return it.next().getClass();
+				}
+			}
+			else if(f instanceof Stream str) {
+				return (Class<?>) str.map(sf -> sf.getClass()).findFirst().orElse(Void.class);
+			}
+			else if(f.getClass().isArray() && Array.getLength(f) > 0) {
+				return Array.get(f, 0).getClass();
+			}
+		}
+		return Void.class;
+	}
+
+	InputType inputTypeForType(Class<?> type) {
+		if(Number.class.isAssignableFrom(type)) {
+			return InputType.NUMBER;
+		}
+		else if(Boolean.class.isAssignableFrom(type)) {
+			return InputType.CHECKBOX;
+		}
+		else if(Instant.class.isAssignableFrom(type) || Calendar.class.isAssignableFrom(type) || Instant.class.isAssignableFrom(type)) {
+			return InputType.DATETIME_LOCAL;
+		}
+		else if(FormFile.class.isAssignableFrom(type)) {
+			return InputType.FILE;
+		}
+		else if(URL.class.isAssignableFrom(type)) {
+			return InputType.URL;
+		}
+		else {
+			return InputType.TEXT;
+		}
 	}
 	
 	boolean resolveReadOnly() {
@@ -703,7 +959,7 @@ public final class Field<T, F> extends AbstractElement {
 	@SuppressWarnings("unchecked")
 	Class<? extends F> resolveType() {
 		return type().orElseGet(() -> {
-			F val = value.orElseGet(() -> ()-> {
+			Object val = value.orElseGet(() -> ()-> {
 				if(inputType.isPresent()) {
 					switch(inputType.get()) {
 					case RADIO:
@@ -712,15 +968,65 @@ public final class Field<T, F> extends AbstractElement {
 						return (F)Boolean.class;
 					case FILE:
 						return (F)FormFile.class;
+					case URL:
+						return (F)URL.class;
 					default:
-						return (F)"";
+						return (F)String.class;
 					}
 				}
 				else {
-					return (F)"";
+					return (F)String.class;
 				}
 			}).get();
-			return  val == null ? null : (Class<F>)(val.getClass());
+			if(val instanceof Class clz) {
+				return clz;
+			}
+			else {
+				if(val == null)
+					throw new IllegalStateException(MessageFormat.format("Cannot resolve type for field {0}.", resolveName()));
+				return (Class<F>)(val.getClass());
+			}
+		});
+	}
+	
+	@SuppressWarnings("unchecked")
+	Class<?> resolveItemType() {
+		return itemType().orElseGet(() -> {
+			Object val = value.orElseGet(() -> ()-> {
+				if(inputType.isPresent()) {
+					switch(inputType.get()) {
+					case RADIO:
+					case CHECKBOX:
+					case SWITCH:
+						return (F)Boolean.class;
+					case FILE:
+						return (F)FormFile.class;
+					case URL:
+						return (F)URL.class;
+					default:
+						return (F)String.class;
+					}
+				}
+				else {
+					return (F)String.class;
+				}
+			}).get();
+			if(val instanceof Class clz) {
+				return clz;
+			}
+			else if(val instanceof Collection col) {
+				var it = col.iterator();
+				if(it.hasNext()) {
+					return it.next().getClass();
+				}
+			}
+			else if(val.getClass().isArray()) {
+				Object[] arr = (Object[])val;
+				if(arr.length > 0) {
+					return arr[0].getClass();
+				}
+			}
+			throw new IllegalStateException(MessageFormat.format("Cannot resolve itemType for field {0}.", resolveName()));
 		});
 	}
 

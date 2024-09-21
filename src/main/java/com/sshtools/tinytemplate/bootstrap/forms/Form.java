@@ -25,17 +25,17 @@ import java.util.function.Consumer;
 import java.util.function.Function;
 import java.util.function.Supplier;
 
+import com.sshtools.tinytemplate.Templates.CloseableTemplateModel;
 import com.sshtools.tinytemplate.Templates.TemplateModel;
 import com.sshtools.tinytemplate.Templates.TemplateProcessor;
 import com.sshtools.tinytemplate.bootstrap.forms.Field.FieldDependency;
+import com.sshtools.tinytemplate.bootstrap.forms.Field.Option;
 import com.sshtools.tinytemplate.bootstrap.forms.InputType.Value;
 import com.sshtools.tinytemplate.bootstrap.forms.Validation.ValidationException;
 import com.sshtools.tinytemplate.bootstrap.forms.Validation.Validator;
 
 
 public final class Form<T> extends AbstractElement implements FormType<T> {
-	
-	public final static TemplateResource INPUT_TEMPLATE = new TemplateResource(Form.class, "input.template.html");
 	
 	public interface Results<T> {
 		
@@ -98,19 +98,6 @@ public final class Form<T> extends AbstractElement implements FormType<T> {
 		TRASH
 	}
 	
-	public final static Map<Icon, Set<String>> DEFAULT_ICONS = Map.of(
-		Icon.TRASH, Set.of("bi", "bi-trash")
-	);
-	
-	public final static Map<Template, TemplateResource> DEFAULT_TEMPLATES = Map.of(
-		Template.FORM, new TemplateResource(Form.class, "form.template.html"),
-		Template.ROW, new TemplateResource(Form.class, "row.template.html"),
-		Template.GROUP, new TemplateResource(Form.class, "group.template.html"),
-		Template.FIELD, new TemplateResource(Form.class, "field.template.html"),
-		Template.COLUMN, new TemplateResource(Form.class, "column.template.html"),
-		Template.TEMPLATE, new TemplateResource(Form.class, "template.template.html")
-	);
-	
 	public final static class Builder<T> extends AbstractFormBuilder<T, Form<T>, Builder<T>> {
 		
 		public static <T> Builder<T> create(Class<T> type) {
@@ -140,6 +127,7 @@ public final class Form<T> extends AbstractElement implements FormType<T> {
 	private final Map<Templatable, TemplateResource> templates;
 	private final Map<Icon, Set<String>> icons;
 	private final Optional<ResourceBundle> bundle;
+	private final Framework framework;
 	private final Set<String> groupCssClass;
 	private final Set<String> optionsCssClass;
 	private final Set<String> rowCssClass;
@@ -154,6 +142,7 @@ public final class Form<T> extends AbstractElement implements FormType<T> {
 	
 	private Form(Builder<T> bldr) {
 		super(bldr);
+		this.framework = bldr.framework.orElseGet(DefaultFramework::get);
 		this.onUnknownField = bldr.onUnknownField;
 		this.validFeedback = bldr.validFeedback;
 		this.feedback = bldr.feedback;
@@ -180,8 +169,14 @@ public final class Form<T> extends AbstractElement implements FormType<T> {
 		});
 		this.fields = Collections.unmodifiableMap(fm);
 		this.sections = Collections.unmodifiableList(bldr.sections);
-		this.templates = Collections.unmodifiableMap(new HashMap<>(bldr.templates));
-		this.icons = Collections.unmodifiableMap(new HashMap<>(bldr.icons));
+		
+		var allTemplates = new HashMap<Templatable, TemplateResource>(framework.defaultTemplates());
+		allTemplates.putAll(bldr.templates);
+		this.templates = Collections.unmodifiableMap(allTemplates);
+
+		var allIcons = new HashMap<Icon, Set<String>>(framework.defaultIcons());
+		allIcons.putAll(bldr.icons);
+		this.icons = Collections.unmodifiableMap(allIcons);
 	}
 
 	public Field<T, ?> field(String id) {
@@ -264,33 +259,37 @@ public final class Form<T> extends AbstractElement implements FormType<T> {
 			@SuppressWarnings("unchecked")
 			@Override
 			public void field(Field<?, ?> field, String val) {
-				doUpdate(validate, processed, commit, values, (Field<T, Object>) field, Field.valueOf(field, val));
+				doUpdate(validate, processed, commit, values, (Field<T, Object>) field, Field.valueOf(framework, field, val));
 			}
 
 			@SuppressWarnings("unchecked")
 			private void doUpdate(boolean validate, ArrayList<Field<T, ?>> processed, ArrayList<Runnable> commit,
 					HashMap<Field<T, ?>, Object> values, Field<T, Object> f, Object obj) {
 				var was = f.value().map(Supplier::get).orElse(null);
-				if(validate) {
-					resolveValidators(f).ifPresent(vs -> {
-						for(var v : vs) {
-							try {
-								v.validate((Field<Object, ?>) f, obj);
-							}
-							catch(ValidationException ve) {
-								addError(f, ve);
-							}
-						}
-					});
-				}
-					
-				values.put(f, obj);
 				
-				if(validate) {
-					commit.add(() -> update(f, obj, was));
-				}
-				else {
-					update(f, obj, was);
+				if(!Objects.equals(obj, was)) {
+				
+					if(validate) {
+						resolveValidators(f).ifPresent(vs -> {
+							for(var v : vs) {
+								try {
+									v.validate((Field<Object, ?>) f, obj);
+								}
+								catch(ValidationException ve) {
+									addError(f, ve);
+								}
+							}
+						});
+					}
+						
+					values.put(f, obj);
+					
+					if(validate) {
+						commit.add(() -> update(f, obj, was));
+					}
+					else {
+						update(f, obj, was);
+					}
 				}
 				
 				processed.add(f);
@@ -393,7 +392,7 @@ public final class Form<T> extends AbstractElement implements FormType<T> {
 			return "<null>";
 		}
 		else {
-			var s = String.valueOf(v);
+			var s = Field.toValString(v);
 			return s.replace("\r", "[cr]").replace("\n", "[nl]");
 		}
 	}
@@ -493,7 +492,7 @@ public final class Form<T> extends AbstractElement implements FormType<T> {
 	private String resolveGroupCssClass(Field<T, ?> field) {
 		var fieldClasses = new LinkedHashSet<String>();
 		if(!field.resolveInputType().options())
-			fieldClasses.addAll(field.resolveInputType().groupCssClass());
+			fieldClasses.addAll(framework.groupCssClass(field.resolveInputType()));
 		fieldClasses.addAll(field.groupCssClass().orElse(groupCssClass));
 		
 		if(isInputGroup(field)) {
@@ -508,7 +507,7 @@ public final class Form<T> extends AbstractElement implements FormType<T> {
 	}
 
 	private boolean isMultiTemplate(Field<T, ?> field) {
-		return field.multiple() && field.resolveInputType().templatable();
+		return field.multiple().orElseGet(field::resolveMultiple) && field.resolveInputType().templatable();
 	}
 	
 	private String resolveLabelCssClass(Field<T, ?> field) {
@@ -517,7 +516,7 @@ public final class Form<T> extends AbstractElement implements FormType<T> {
 			labelClasses.addAll(lcss);
 		}, () -> {
 			if(!hasOptions(field)) {
-				labelClasses.addAll(field.resolveInputType().labelCssClass());
+				labelClasses.addAll(framework.labelCssClass(field.resolveInputType()));
 			}
 		});
 		return String.join(" ", labelClasses);
@@ -564,28 +563,17 @@ public final class Form<T> extends AbstractElement implements FormType<T> {
 		var type = field.resolveInputType();
 		
 		/* TODO hrm */
+		@SuppressWarnings("unchecked")
 		var mdl = ((Field<T, Object>)field).renderer().map(r ->r.apply(field)).orElseGet(() -> ofResource(fieldTemplate.base(), fieldTemplate.resource()));
+		
 		var hasOptions = hasOptions(field);
-		var floatingLabel = !hasOptions && resolveFloatingLabel(field);
 		
 		mdl.variable("id", id);
 		mdl.variable("input.id", inputId);
 		mdl.variable("input.value", () -> Field.toString(field));
-		mdl.variable("label.class", resolveLabelCssClass(field));
-		if(!field.noLabel()) {
-			resolveText(field, resolvedId).ifPresent(str -> mdl.variable("label", str));
-		}
-		
 		mdl.condition("input.group", field.inputGroupBefore().isPresent() || field.inputGroupAfter().isPresent());
-		resolveString("help", resolvedId, field.help(), null).ifPresent(str -> mdl.variable("help", str));
-
-		mdl.condition("label.first", () ->  
-			hasOptions || ( type.labelFirst() && !floatingLabel ) 
-		);
-		mdl.condition("label.floating", floatingLabel);
-		mdl.condition("has.label", mdl.hasVariable("label"));			
-		mdl.condition("has.placeholder", mdl.hasVariable("placeholder"));			
-		mdl.condition("has.help", mdl.hasVariable("help"));
+		
+		buildCommonFieldAndInput(field, resolvedId, type, mdl);
 		
 		if(hasOptions && type.optionsAsFields()) {
 			var opts = field.options().get().get();
@@ -633,6 +621,26 @@ public final class Form<T> extends AbstractElement implements FormType<T> {
 		return mdl;
 	}
 
+	private void buildCommonFieldAndInput(Field<T, ?> field, String resolvedId, InputType type, TemplateModel mdl) {
+		var hasOptions = hasOptions(field);
+		var floatingLabel = !hasOptions && resolveFloatingLabel(field);
+		
+		mdl.variable("label.class", resolveLabelCssClass(field));
+		if(!field.noLabel()) {
+			resolveText(field, resolvedId).ifPresent(str -> mdl.variable("label", str));
+		}
+		
+		resolveString("help", resolvedId, field.help(), null).ifPresent(str -> mdl.variable("help", str));
+
+		mdl.condition("label.first", () ->  
+			hasOptions || ( type.labelFirst() && !floatingLabel ) 
+		);
+		mdl.condition("label.floating", floatingLabel);
+		mdl.condition("has.label", mdl.hasVariable("label"));			
+		mdl.condition("has.placeholder", mdl.hasVariable("placeholder"));			
+		mdl.condition("has.help", mdl.hasVariable("help"));
+	}
+
 	protected boolean hasOptions(Field<T, ?> field) {
 		return field.options().isPresent();
 	}
@@ -671,7 +679,7 @@ public final class Form<T> extends AbstractElement implements FormType<T> {
 	private Set<String> resolveInputClass(Field<T, ?> field, InputType type) {
 		var l = new LinkedHashSet<String>();
 		if(!type.tag().equalsIgnoreCase("input") || !type.options())
-			l.addAll(type.cssClass());
+			l.addAll(framework.cssClass(type));
 		if(field.feedback().orElse(feedback)) {
 			var feedback = errors.get(field);
 			if(feedback == null) {
@@ -689,7 +697,7 @@ public final class Form<T> extends AbstractElement implements FormType<T> {
 	private TemplateModel buildInput(String fieldId, int rowIndex, int colIndex, String inputId, String resolvedId, Field<T, ?> field, InputType type, boolean hasHelp, boolean hasFeedback, boolean selected) {
 		var inputTemplate = templates.get(type);
 		if(inputTemplate == null) {
-			inputTemplate = INPUT_TEMPLATE;
+			inputTemplate = framework.defaultTemplates().get(Template.INPUT);
 		}
 		var mdl = ofResource(inputTemplate.base(), inputTemplate.resource());
 		
@@ -704,20 +712,18 @@ public final class Form<T> extends AbstractElement implements FormType<T> {
 			mdl.variable("checked", selected);
 		}
 		
+		buildCommonFieldAndInput(field, resolvedId, type, mdl);
+		
 		mdl.condition(type.tag(), true);
+		mdl.condition("is." + type.name().toLowerCase(), true);
 		mdl.condition("disabled", () -> resolveDisabled(field));
 		mdl.condition("readonly", field::resolveReadOnly);
 		mdl.condition("required", field::required);
-		mdl.condition("multiple", field::multiple);
+		mdl.condition("multiple", () -> field.multiple().orElseGet(field::resolveMultiple));
 		
 		field.pattern().ifPresent(p -> mdl.variable("pattern", p));
 		
-		field.inputGroupBefore().ifPresent(ig -> mdl.variable("input.group.before", ig));
-		field.inputGroupAfter().ifPresentOrElse(ig -> mdl.variable("input.group.after", ig), () -> {
-			if(isMultiTemplate(field)) {
-				mdl.variable("input.group.after", "<a href=\"#\" role=\"remove-templated-row\"><i class=\"" + String.join(" ", icons.get(Icon.TRASH)) + "\"></i></a>");
-			}
-		});
+		buildInputGroups(field, mdl);
 		
 		field.attrs().forEach((k,v) -> {
 			mdl.variable("attr." + k, v);
@@ -731,8 +737,8 @@ public final class Form<T> extends AbstractElement implements FormType<T> {
 						variable("name", field.resolveName()).
 						variable("id", inputId).
 						variable("text", opt.text().resolveString(bundle)).
-						variable("value", opt.value()).
-						condition("selected", opt.value().equals(field.value().map(v -> String.valueOf(v.get())).orElse("")));
+						variable("value", framework.processValueRender(field, opt.value())).
+						condition("selected", isSelected(field, opt));
 					}).toList()
 			);
 		});
@@ -761,9 +767,9 @@ public final class Form<T> extends AbstractElement implements FormType<T> {
 		}
 		
 		field.value().ifPresent(sup -> { 
-			var val = Field.toString(field);
+			var val = Field.toString(framework, field);
 			mdl.variable("value", val);
-			if(type.value() == Value.ATTRIBUTE || type.value() == Value.CHECKED_VALUE) {
+			if((type.value() == Value.ATTRIBUTE || type.value() == Value.CHECKED_VALUE) && type.inputTag()) {
 				attrs.put("value", val);
 			} 
 		});
@@ -771,6 +777,30 @@ public final class Form<T> extends AbstractElement implements FormType<T> {
 		mdl.variable("attrs", attrsToString(attrs));
 		
 		return mdl;
+	}
+
+	private void buildInputGroups(Field<T, ?> field, CloseableTemplateModel mdl) {
+		field.inputGroupBefore().ifPresent(ig -> mdl.include("input.group.before", ig));
+		field.inputGroupAfter().ifPresentOrElse(ig -> mdl.include("input.group.after", ig), () -> {
+			if(isMultiTemplate(field)) {
+				mdl.include("input.group.after", TemplateModel.ofContent("<a href=\"#\" role=\"remove-templated-row\"><i class=\"" + String.join(" ", icons.get(Icon.TRASH)) + "\"></i></a>"));
+			}
+		});
+	}
+	
+	@SuppressWarnings("unchecked")
+	private boolean isSelected(Field<T, ?> field, Option opt) {
+		if(field.value().isPresent()) {
+			Object val = field.value().get().get();
+			if(val.getClass().isArray()) {
+				val = Arrays.asList((Object[])val);
+			}
+			if(val instanceof Collection col) {
+				return col.stream().map(Field::toValString).toList().contains(opt.value());
+			}
+		}
+		
+		return opt.value().equals(field.value().map(v -> Field.toValString(v.get())).orElse(""));
 	}
 
 	protected String attrsToString(Map<String, String> attrs) {

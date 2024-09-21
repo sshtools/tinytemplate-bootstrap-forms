@@ -1,14 +1,13 @@
 package com.sshtools.tinytemplate.bootstrap.forms;
 
-import java.util.Collections;
 import java.util.Optional;
-import java.util.Set;
 
 import com.sshtools.tinytemplate.bootstrap.forms.Validation.RangeValidator;
 import com.sshtools.tinytemplate.bootstrap.forms.Validation.Validator;
 
 public enum InputType implements Templatable {
-	AUTO, TEXT, FILE, TEXTAREA, NUMBER, EMAIL, SELECT, CHECKBOX, RADIO, SWITCH, RANGE, PASSWORD, URL, NONE;
+	AUTO, TEXT, FILE, TEXTAREA, NUMBER, TEL, EMAIL, SELECT, CHECKBOX, RADIO, SWITCH, RANGE, PASSWORD, URL,
+	DATE, DATETIME_LOCAL, MONTH, TIME, NONE;
 	
 	public enum Value {
 		ATTRIBUTE, CHECKED, CONTENT, CHECKED_VALUE, NONE
@@ -65,6 +64,11 @@ public enum InputType implements Templatable {
 			return name().toLowerCase();
 		return "input";
 	}
+
+
+	public boolean inputTag() {
+		return tag().equals("input");
+	}
 	
 	
 	public Value value() {
@@ -96,7 +100,7 @@ public enum InputType implements Templatable {
 		else if (this == InputType.SWITCH)
 			return "checkbox";
 		else
-			return name().toLowerCase();
+			return name().toLowerCase().replace('_', '-');
 	}
 	
 	public boolean options() {
@@ -113,30 +117,5 @@ public enum InputType implements Templatable {
 		else if (this == InputType.RADIO || this == InputType.CHECKBOX || this == InputType.SWITCH)
 			return false;
 		return true;
-	}
-
-	public Set<String> groupCssClass() {
-		if (this == InputType.CHECKBOX || this == InputType.RADIO)
-			return Set.of("form-check");
-		else if (this == InputType.SWITCH)
-			return Set.of("form-check", "form-switch");
-		else
-			return Collections.emptySet();
-	}
-
-	public Set<String> labelCssClass() {
-		if (this == InputType.CHECKBOX || this == InputType.SWITCH || this == InputType.RADIO)
-			return Set.of("form-check-label");
-		else
-			return Set.of("form-label");
-	}
-
-	public Set<String> cssClass() {
-		if (this == InputType.CHECKBOX || this == InputType.SWITCH || this == InputType.RADIO)
-			return Set.of("form-check-input");
-		else if (this == InputType.RANGE)
-			return Set.of("form-range"); 
-		else
-			return Set.of("form-control");
 	}
 }

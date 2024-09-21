@@ -21,8 +21,8 @@ public abstract class AbstractFormBuilder<T, FORM, BLDR extends AbstractFormBuil
 	Optional<Class<T>> type = Optional.empty();
 	Optional<Locale> locale = Optional.empty();
 	List<Field<T, ?>> fields = new ArrayList<>();
-	Map<Templatable, TemplateResource> templates = new HashMap<>(Form.DEFAULT_TEMPLATES);
-	Map<Icon, Set<String>> icons = new HashMap<>(Form.DEFAULT_ICONS);
+	Map<Templatable, TemplateResource> templates = new HashMap<>();
+	Map<Icon, Set<String>> icons = new HashMap<>();
 	Optional<ResourceBundle> bundle = Optional.empty();
 	Optional<String> bundleName = Optional.empty();
 	Optional<ClassLoader> bundleClassLoader = Optional.empty();
@@ -35,6 +35,7 @@ public abstract class AbstractFormBuilder<T, FORM, BLDR extends AbstractFormBuil
 	boolean feedback = true;
 	List<FormSection<T>> sections = new ArrayList<>();
 	Optional<BiConsumer<FORM, String>> onUnknownField = Optional.empty();
+	Optional<Framework> framework = Optional.empty();
 		
 	protected AbstractFormBuilder(Optional<T> instance, Optional<Class<T>> type) {
 		super();
@@ -191,6 +192,12 @@ public abstract class AbstractFormBuilder<T, FORM, BLDR extends AbstractFormBuil
 	@SuppressWarnings("unchecked")
 	public BLDR icon(Icon icon, Set<String> classes) {
 		icons.put(icon, classes);
+		return (BLDR)this;
+	}
+	
+	@SuppressWarnings("unchecked")
+	public BLDR framework(Framework framework) {
+		this.framework = Optional.of(framework);
 		return (BLDR)this;
 	}
 
