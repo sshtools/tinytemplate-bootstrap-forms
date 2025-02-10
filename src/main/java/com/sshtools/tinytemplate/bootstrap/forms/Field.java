@@ -1021,12 +1021,9 @@ public final class Field<T, F> extends AbstractElement {
 				}
 			}
 			else if(val.getClass().isArray()) {
-				Object[] arr = (Object[])val;
-				if(arr.length > 0) {
-					return arr[0].getClass();
-				}
+				return val.getClass().getComponentType();
 			}
-			throw new IllegalStateException(MessageFormat.format("Cannot resolve itemType for field {0}.", resolveName()));
+			throw new IllegalStateException(MessageFormat.format("Cannot resolve itemType for field {0}. {1}", resolveName(), val.getClass()));
 		});
 	}
 
