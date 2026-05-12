@@ -2,6 +2,9 @@ package com.sshtools.tinytemplate.bootstrap.forms;
 
 import static com.sshtools.tinytemplate.Templates.TemplateModel.ofContent;
 import static com.sshtools.tinytemplate.Templates.TemplateModel.ofResource;
+import static java.lang.Character.isUpperCase;
+import static java.lang.Character.toLowerCase;
+import static java.lang.Character.toUpperCase;
 
 import java.io.InputStream;
 import java.text.MessageFormat;
@@ -27,7 +30,6 @@ import java.util.function.Supplier;
 
 import com.sshtools.tinytemplate.Templates.CloseableTemplateModel;
 import com.sshtools.tinytemplate.Templates.TemplateModel;
-import com.sshtools.tinytemplate.Templates.TemplateProcessor;
 import com.sshtools.tinytemplate.bootstrap.forms.Field.FieldDependency;
 import com.sshtools.tinytemplate.bootstrap.forms.Field.Option;
 import com.sshtools.tinytemplate.bootstrap.forms.InputType.Value;
@@ -245,7 +247,7 @@ public final class Form<T> extends AbstractElement implements FormType<T> {
 			public Field<T, ?> field(String fieldName) {
 				var v = fields.get(fieldName);
 				if(v == null) {
-					onUnknownField.orElseThrow(() -> new IllegalArgumentException(MessageFormat.format("No field ''{0}'' in form.", fieldName))).accept(Form.this, fieldName);
+					onUnknownField.orElseThrow(() -> new IllegalArgumentException(MessageFormat.format("No field `{0}` in form.", fieldName))).accept(Form.this, fieldName);
 				}
 				return v;
 			}
@@ -291,6 +293,8 @@ public final class Form<T> extends AbstractElement implements FormType<T> {
 						update(f, obj, was);
 					}
 				}
+				else	
+					values.put(f, obj);
 				
 				processed.add(f);
 			}
@@ -298,7 +302,7 @@ public final class Form<T> extends AbstractElement implements FormType<T> {
 			private void update(Field<T, Object> f, Object obj, Object was) {
 				f.update().ifPresentOrElse(u -> {
 					if(f.readOnly().orElse(false)) {
-						throw new IllegalStateException(MessageFormat.format("Value has changed from ''{0}'' to ''{1}'', but ''{2}'' is read only.", debugVal(was), debugVal(obj), f.resolveName()));
+						throw new IllegalStateException(MessageFormat.format("Value has changed from `{0}` to `{1}`, but `{2}` is read only.", debugVal(was), debugVal(obj), f.resolveName()));
 					}
 					u.accept(obj);
 				}, () -> {
@@ -337,13 +341,13 @@ public final class Form<T> extends AbstractElement implements FormType<T> {
 
 			@Override
 			public <F> F value(String field) {
-				return value(Objects.requireNonNull(fields.get(field),() -> MessageFormat.format("No such field ''{0}''.", field)));
+				return value(Objects.requireNonNull(fields.get(field),() -> MessageFormat.format("No such field `{0}`.", field)));
 			}
 
 			@SuppressWarnings("unchecked")
 			@Override
 			public <F> F value(Field<T, ?> field) {
-				return Objects.requireNonNull((F)values.get(field),() -> MessageFormat.format("No such value for ''{0}''.", field));
+				return Objects.requireNonNull((F)values.get(field),() -> MessageFormat.format("No such value for `{0}`.", field));
 			}
 
 			@Override
@@ -409,28 +413,30 @@ public final class Form<T> extends AbstractElement implements FormType<T> {
 		var colIndex = 0;		
 		
 		for(var field : fields) {
-			if(field.fills()) {
-				if(!cols.isEmpty()) {
-					rows.add(buildRow(rowIndex, cols));
-					rowIndex++;
-					colIndex = 0;
-				}
-				
-				rows.add(buildGroup(rowIndex, colIndex, field, false));
-					rowIndex++;
-				spans = 0;
-			}
-			else {
-				var span = field.spans();
-				if(span + spans > 12) {
-					rows.add(buildRow(rowIndex, cols));
-					rowIndex++;
-					colIndex = 0;
+			if(field.resolveInputType() != InputType.NONE) {
+				if(field.fills()) {
+					if(!cols.isEmpty()) {
+						rows.add(buildRow(rowIndex, cols));
+						rowIndex++;
+						colIndex = 0;
+					}
+					
+					rows.add(buildGroup(rowIndex, colIndex, field, false));
+						rowIndex++;
 					spans = 0;
 				}
-				cols.add(buildColumn(rowIndex, colIndex, field));
-				colIndex++;
-				spans += span;
+				else {
+					var span = field.spans();
+					if(span + spans > 12) {
+						rows.add(buildRow(rowIndex, cols));
+						rowIndex++;
+						colIndex = 0;
+						spans = 0;
+					}
+					cols.add(buildColumn(rowIndex, colIndex, field));
+					colIndex++;
+					spans += span;
+				}
 			}
 		}
 		
@@ -639,6 +645,7 @@ public final class Form<T> extends AbstractElement implements FormType<T> {
 		mdl.condition("has.label", mdl.hasVariable("label"));			
 		mdl.condition("has.placeholder", mdl.hasVariable("placeholder"));			
 		mdl.condition("has.help", mdl.hasVariable("help"));
+		mdl.condition("input." + type.name().toLowerCase(), true);
 	}
 
 	protected boolean hasOptions(Field<T, ?> field) {
@@ -869,12 +876,12 @@ public final class Form<T> extends AbstractElement implements FormType<T> {
 	public static String spaceOnCaseChange(String fieldName, boolean capitals) {
 		if (fieldName == null || fieldName.length() == 0)
 			return fieldName;
-		char[] strChr = fieldName.toCharArray();
-		boolean upper = Character.isUpperCase(strChr[0]);
-		StringBuilder b = new StringBuilder();
-		b.append(Character.toUpperCase(strChr[0]));
-		for (int i = 1; i < strChr.length; i++) {
-			boolean nu = Character.isUpperCase(strChr[i]);
+		var strChr = fieldName.toCharArray();
+		var upper = isUpperCase(strChr[0]);
+		var b = new StringBuilder();
+		b.append(toUpperCase(strChr[0]));
+		for (var i = 1; i < strChr.length; i++) {
+			var nu = isUpperCase(strChr[i]);
 			if (upper != nu && nu) {
 				b.append(' ');
 			}
@@ -882,41 +889,10 @@ public final class Form<T> extends AbstractElement implements FormType<T> {
 			if (capitals)
 				b.append(strChr[i]);
 			else
-				b.append(Character.toLowerCase(strChr[i]));
+				b.append(toLowerCase(strChr[i]));
 		}
 		return b.toString();
 	}
-	
-	private final static record TestObject(String name, int age) {
-	}
-
-	public static void main(String[] args) {
-		var form = Form.Builder.edit(new TestObject("Brett Smith", 27)).
-				field(f-> f. 
-//					    span(6).
-					  label("Name").
-					  placeholder("First name, Surname").
-					  help("Your full name please").
-					  value(f.$()::name)
-				).
-				field(f-> f.
-//					    span(6).
-//					  input(InputType.NUMBER).
-					  label("Age").
-					  placeholder("0-150").
-					  help("Enter your age").
-					  attrs(Map.of(
-					    "min", "0",
-					    "max", "150"
-					  )).
-					  disabled().
-					  value(f.$()::age)
-				).build();
-		
-		var tp = new TemplateProcessor.Builder().build();
-		System.out.println(tp.process(form.model()));
-	}
-	
 }
 
 

@@ -269,7 +269,7 @@ public final class Field<T, F> extends AbstractElement {
 			}
 		}
 		else {
-			throw new UnsupportedOperationException(MessageFormat.format("Unsupported type ''{0}''", clazz.getName()));
+			throw new UnsupportedOperationException(MessageFormat.format("Unsupported type `{0}`", clazz.getName()));
 		}
 		return (F)obj;
 	}

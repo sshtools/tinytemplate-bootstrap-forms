@@ -7,7 +7,7 @@ import com.sshtools.tinytemplate.bootstrap.forms.Validation.Validator;
 
 public enum InputType implements Templatable {
 	AUTO, TEXT, FILE, TEXTAREA, NUMBER, TEL, EMAIL, SELECT, CHECKBOX, RADIO, SWITCH, RANGE, PASSWORD, URL,
-	DATE, DATETIME_LOCAL, MONTH, TIME, NONE;
+	DATE, DATETIME_LOCAL, MONTH, TIME, HIDDEN, NONE;
 	
 	public enum Value {
 		ATTRIBUTE, CHECKED, CONTENT, CHECKED_VALUE, NONE
